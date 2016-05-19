@@ -289,6 +289,31 @@
   [f]
   (swap! view-system assoc :put-hints-fn f))
 
+(defn init!
+  "Initializes the view system for use with some basic defaults that can be
+   overridden as needed. Many applications may want to ignore this function
+   and instead manually initialize the view system themselves. Some of the
+   defaults set by this function are only appropriate for non-distributed
+   configurations."
+  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn views]
+      :or   {refresh-interval 1000
+             worker-threads   4
+             put-hints-fn     #(refresh-views! %)}}]
+  (if send-fn
+    (set-send-fn! send-fn))
+  (if put-hints-fn
+    (set-put-hints-fn! put-hints-fn))
+  (if views
+    (add-views! views))
+  (start-update-watcher! refresh-interval worker-threads))
+
+(defn shutdown!
+  "Closes the view system down, terminating all worker threads and clearing
+   all view subscriptions and data."
+  []
+  (stop-update-watcher!)
+  (reset! view-system {}))
+
 (comment
   (defrecord SQLView [id query-fn]
     IView
