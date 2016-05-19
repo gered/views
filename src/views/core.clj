@@ -98,6 +98,14 @@
                      (dissoc subscribed subscriber-key)
                      subscribed)))))
 
+(defn- clean-up-unneeded-hashes
+  [view-system view-sig]
+  ; hashes for view-sigs which do not have any unsubscribers are no longer necessary
+  ; to keep around (again, at risk of endlessly filling up with tons of hashes over time)
+  (if-not (get (:subscribers view-system) view-sig)
+    (update-in view-system [:hashes] dissoc view-sig)
+    view-system))
+
 (defn unsubscribe!
   [namespace view-id parameters subscriber-key]
   (swap! view-system
@@ -105,7 +113,8 @@
            (let [view-sig [namespace view-id parameters]]
              (-> vs
                  (remove-from-subscribed view-sig subscriber-key)
-                 (remove-from-subscribers view-sig subscriber-key))))))
+                 (remove-from-subscribers view-sig subscriber-key)
+                 (clean-up-unneeded-hashes view-sig))))))
 
 (defn unsubscribe-all!
   "Remove all subscriptions by a given subscriber."
