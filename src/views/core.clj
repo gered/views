@@ -73,15 +73,39 @@
 
 (defn- remove-from-subscribers
   [view-system view-sig subscriber-key]
-  (update-in view-system [:subscribers view-sig] disj subscriber-key))
+  (-> view-system
+      (update-in [:subscribers view-sig] disj subscriber-key)
+      ; remove view-sig entry if no subscribers. helps prevent the subscribers
+      ; map from e.g. endlessly filling up with all sorts of different
+      ; view-sigs with crazy amounts of only-slightly-varying parameters
+      (update-in [:subscribers]
+                 (fn [subscribers]
+                   (if (empty? (get subscribers view-sig))
+                     (dissoc subscribers view-sig)
+                     subscribers)))))
+
+(defn- remove-from-subscribed
+  [view-system view-sig subscriber-key]
+  (-> view-system
+      (update-in [:subscribed subscriber-key] disj view-sig)
+      ; remove subscriber-key entry if no current subscriptions. this helps prevent
+      ; the subscribed map from (for example) endlessly filling up with massive
+      ; amounts of entries with no subscriptions. this could easily happen over time
+      ; naturally for applications with long uptimes.
+      (update-in [:subscribed]
+                 (fn [subscribed]
+                   (if (empty? (get subscribed subscriber-key))
+                     (dissoc subscribed subscriber-key)
+                     subscribed)))))
 
 (defn unsubscribe!
   [namespace view-id parameters subscriber-key]
   (swap! view-system
          (fn [vs]
-           (-> vs
-               (update-in [:subscribed subscriber-key] disj [namespace view-id parameters])
-               (remove-from-subscribers [namespace view-id parameters] subscriber-key)))))
+           (let [view-sig [namespace view-id parameters]]
+             (-> vs
+                 (remove-from-subscribed view-sig subscriber-key)
+                 (remove-from-subscribers view-sig subscriber-key))))))
 
 (defn unsubscribe-all!
   "Remove all subscriptions by a given subscriber."
