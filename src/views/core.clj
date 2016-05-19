@@ -11,6 +11,7 @@
 ;;
 ;; {:views {:id1 view1, id2 view2, ...}
 ;;  :send-fn (fn [subscriber-key data] ...)
+;;  :put-hints-fn (fn [hints] ... )
 ;;
 ;;  :hashes {view-sig hash, ...}
 ;;  :subscribed {subscriber-key #{view-sig, ...}}
@@ -277,8 +278,16 @@
   (swap! view-system update-in [:views] (fnil into {}) (map vector (map id views) views)))
 
 (defn set-send-fn!
+  "Sets a function that sends view data to a subscriber whenever a view it
+   is subscribed to has refreshed data."
   [f]
   (swap! view-system assoc :send-fn f))
+
+(defn set-put-hints-fn!
+  "Sets a function that adds hints to the view system. The function set is intended
+   to be used by other implementations of IView."
+  [f]
+  (swap! view-system assoc :put-hints-fn f))
 
 (comment
   (defrecord SQLView [id query-fn]
