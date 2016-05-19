@@ -150,8 +150,9 @@
 (defn refresh-views!
   "Given a collection of hints, or a single hint, find all dirty views and schedule them for a refresh."
   ([hints]
-   (debug "refresh hints:" hints)
-   (mapv #(refresh-view! hints %) (subscribed-views))
+   (when (seq hints)
+     (debug "refresh hints:" hints)
+     (mapv #(refresh-view! hints %) (subscribed-views)))
    (swap! view-system assoc :last-update (System/currentTimeMillis)))
   ([]
    (refresh-views! (pop-hints!))))
