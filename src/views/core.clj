@@ -267,6 +267,10 @@
   [views]
   (swap! view-system update-in [:views] (fnil into {}) (map vector (map id views) views)))
 
+(defn set-send-fn!
+  [f]
+  (swap! view-system assoc :send-fn f))
+
 (comment
   (defrecord SQLView [id query-fn]
     IView
