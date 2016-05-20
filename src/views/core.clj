@@ -44,6 +44,12 @@
 
 (def refresh-queue (ArrayBlockingQueue. refresh-queue-size))
 
+(defn ->view-sig
+  [namespace view-id parameters]
+  {:namespace  namespace
+   :view-id    view-id
+   :parameters parameters})
+
 (defn- subscribe-view!
   [view-system view-sig subscriber-key]
   (-> view-system
@@ -57,7 +63,7 @@
 (defn subscribe!
   [namespace view-id parameters subscriber-key]
   (when-let [view (get-in @view-system [:views view-id])]
-    (let [view-sig [namespace view-id parameters]]
+    (let [view-sig (->view-sig namespace view-id parameters)]
       (swap! view-system subscribe-view! view-sig subscriber-key)
       (future
         (try
@@ -111,7 +117,7 @@
   [namespace view-id parameters subscriber-key]
   (swap! view-system
          (fn [vs]
-           (let [view-sig [namespace view-id parameters]]
+           (let [view-sig (->view-sig namespace view-id parameters)]
              (-> vs
                  (remove-from-subscribed view-sig subscriber-key)
                  (remove-from-subscribers view-sig subscriber-key)
@@ -128,7 +134,7 @@
 
 (defn refresh-view!
   "We refresh a view if it is relevant and its data hash has changed."
-  [hints [namespace view-id parameters :as view-sig]]
+  [hints {:keys [namespace view-id parameters] :as view-sig}]
   (let [v (get-in @view-system [:views view-id])]
     (try
       (if (relevant? v namespace parameters hints)
@@ -180,7 +186,7 @@
   []
   (fn []
     (try
-      (when-let [[namespace view-id parameters :as view-sig] (.poll ^ArrayBlockingQueue refresh-queue 60 TimeUnit/SECONDS)]
+      (when-let [{:keys [namespace view-id parameters] :as view-sig} (.poll ^ArrayBlockingQueue refresh-queue 60 TimeUnit/SECONDS)]
         (when (collect-stats?) (swap! statistics update-in [:refreshes] inc))
         (try
           (let [view  (get-in @view-system [:views view-id])
