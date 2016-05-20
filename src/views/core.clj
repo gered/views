@@ -9,15 +9,16 @@
 
 ;; The view-system data structure has this shape:
 ;;
-;; {:views {:id1 view1, id2 view2, ...}
-;;  :send-fn (fn [subscriber-key data] ...)
+;; {:views        {:id1 view1, id2 view2, ...}
+;;  :send-fn      (fn [subscriber-key data] ...)
 ;;  :put-hints-fn (fn [hints] ... )
-;;  :auth-fn (fn [view-sig subscriber-key context] ...)
+;;  :auth-fn      (fn [view-sig subscriber-key context] ...)
+;;  :namespace-fn (fn [view-sig subscriber-key context] ...)
 ;;
-;;  :hashes {view-sig hash, ...}
-;;  :subscribed {subscriber-key #{view-sig, ...}}
-;;  :subscribers {view-sig #{subscriber-key, ...}}
-;;  :hints #{hint1 hint2 ...}
+;;  :hashes       {view-sig hash, ...}
+;;  :subscribed   {subscriber-key #{view-sig, ...}}
+;;  :subscribers  {view-sig #{subscriber-key, ...}}
+;;  :hints        #{hint1 hint2 ...}
 ;;
 ;;  }
 ;;
@@ -46,10 +47,13 @@
 (def refresh-queue (ArrayBlockingQueue. refresh-queue-size))
 
 (defn ->view-sig
-  [namespace view-id parameters]
-  {:namespace  namespace
-   :view-id    view-id
-   :parameters parameters})
+  ([namespace view-id parameters]
+   {:namespace  namespace
+    :view-id    view-id
+    :parameters parameters})
+  ([view-id parameters]
+   {:view-id    view-id
+    :parameters parameters}))
 
 (defn- send-view-data!
   [subscriber-key {:keys [namespace view-id parameters] :as view-sig} data]
@@ -65,6 +69,12 @@
     ; so do not disallow access to any subscription
     true))
 
+(defn- get-namespace
+  [view-sig subscriber-key context]
+  (if-let [namespace-fn (:namespace-fn @view-system)]
+    (namespace-fn view-sig subscriber-key context)
+    (:namespace view-sig)))
+
 (defn- subscribe-view!
   [view-system view-sig subscriber-key]
   (-> view-system
@@ -76,9 +86,10 @@
   (update-in view-system [:hashes view-sig] #(or % data-hash))) ;; see note #1 in NOTES.md
 
 (defn subscribe!
-  [namespace view-id parameters subscriber-key & [context]]
+  [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
   (when-let [view (get-in @view-system [:views view-id])]
-    (let [view-sig (->view-sig namespace view-id parameters)]
+    (let [namespace (get-namespace view-sig subscriber-key context)
+          view-sig  (->view-sig namespace view-id parameters)]
       (if (authorized-subscription? view-sig subscriber-key context)
         (do
           (swap! view-system subscribe-view! view-sig subscriber-key)
@@ -132,10 +143,11 @@
     view-system))
 
 (defn unsubscribe!
-  [namespace view-id parameters subscriber-key]
+  [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
   (swap! view-system
          (fn [vs]
-           (let [view-sig (->view-sig namespace view-id parameters)]
+           (let [namespace (get-namespace view-sig subscriber-key context)
+                 view-sig  (->view-sig namespace view-id parameters)]
              (-> vs
                  (remove-from-subscribed view-sig subscriber-key)
                  (remove-from-subscribers view-sig subscriber-key)
@@ -319,19 +331,25 @@
   [f]
   (swap! view-system assoc :auth-fn f))
 
+(defn set-namespace-fn!
+  "Sets a function that returns a namespace to use for view subscriptions."
+  [f]
+  (swap! view-system assoc :namespace-fn f))
+
 (defn init!
   "Initializes the view system for use with some basic defaults that can be
    overridden as needed. Many applications may want to ignore this function
    and instead manually initialize the view system themselves. Some of the
    defaults set by this function are only appropriate for non-distributed
    configurations."
-  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn views]
+  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn namespace-fn views]
       :or   {refresh-interval 1000
              worker-threads   4
              put-hints-fn     #(refresh-views! %)}}]
   (if send-fn (set-send-fn! send-fn))
   (if put-hints-fn (set-put-hints-fn! put-hints-fn))
   (if auth-fn (set-auth-fn! auth-fn))
+  (if namespace-fn (set-namespace-fn! namespace-fn))
   (if views (add-views! views))
   (start-update-watcher! refresh-interval worker-threads))
 
