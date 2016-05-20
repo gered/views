@@ -300,8 +300,8 @@
 
 (defn hint
   "Create a hint."
-  [namespace hint]
-  {:namespace namespace :hint hint})
+  [namespace hint type]
+  {:namespace namespace :hint hint :type type})
 
 (defn add-hint!
   "Add a hint to the system."
