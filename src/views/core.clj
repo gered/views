@@ -50,6 +50,12 @@
    :view-id    view-id
    :parameters parameters})
 
+(defn- send-view-data!
+  [subscriber-key {:keys [namespace view-id parameters] :as view-sig} data]
+  (if-let [send-fn (:send-fn @view-system)]
+    (send-fn subscriber-key [[view-id parameters] data])
+    (throw (new Exception "no send-fn function set in view-system"))))
+
 (defn- subscribe-view!
   [view-system view-sig subscriber-key]
   (-> view-system
@@ -73,7 +79,7 @@
             ;; an unsubscription event came in while computing the view.
             (when (contains? (get-in @view-system [:subscribed subscriber-key]) view-sig)
               (swap! view-system update-hash! view-sig data-hash)
-              ((get @view-system :send-fn) subscriber-key [[view-id parameters] vdata])))
+              (send-view-data! subscriber-key view-sig vdata)))
           (catch Exception e
             (error "error subscribing:" namespace view-id parameters
                    "e:" e "msg:" (.getMessage e))))))))
@@ -193,8 +199,8 @@
                 vdata (data view namespace parameters)
                 hdata (hash vdata)]
             (when-not (= hdata (get-in @view-system [:hashes view-sig]))
-              (doseq [s (get-in @view-system [:subscribers view-sig])]
-                ((:send-fn @view-system) s [[view-id parameters] vdata]))
+              (doseq [subscriber-key (get-in @view-system [:subscribers view-sig])]
+                (send-view-data! subscriber-key view-sig vdata))
               (swap! view-system assoc-in [:hashes view-sig] hdata)))
           (catch Exception e
             (error "error refreshing:" namespace view-id parameters
