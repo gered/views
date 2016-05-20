@@ -86,6 +86,12 @@
   (update-in view-system [:hashes view-sig] #(or % data-hash))) ;; see note #1 in NOTES.md
 
 (defn subscribe!
+  "Creates a subscription to a view identified by view-sig for a subscriber
+   identified by subscriber-key. If the subscription is not authorized,
+   returns nil. Additional context info can be passed in, which will be
+   passed to the view-system's namespace-fn and auth-fn (if provided). If
+   the subscription is successful, the subscriber will be sent the initial
+   data for the view."
   [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
   (when-let [view (get-in @view-system [:views view-id])]
     (let [namespace (get-namespace view-sig subscriber-key context)
@@ -143,6 +149,9 @@
     view-system))
 
 (defn unsubscribe!
+  "Removes a subscription to a view identified by view-sig for a subscriber
+   identified by subscriber-key. Additional context info can be passed in,
+   which will be passed to the view-system's namespace-fn (if provided)."
   [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
   (swap! view-system
          (fn [vs]
@@ -154,7 +163,8 @@
                  (clean-up-unneeded-hashes view-sig))))))
 
 (defn unsubscribe-all!
-  "Remove all subscriptions by a given subscriber."
+  "Removes all of a subscriber's (identified by subscriber-key) current
+   view subscriptions."
   [subscriber-key]
   (swap! view-system
          (fn [vs]
@@ -163,7 +173,8 @@
              (reduce #(remove-from-subscribers %1 %2 subscriber-key) vs* view-sigs)))))
 
 (defn refresh-view!
-  "We refresh a view if it is relevant and its data hash has changed."
+  "Schedules a view (identified by view-sig) to be refreshed by one of the worker threads
+   only if the provided collection of hints is relevant to that view."
   [hints {:keys [namespace view-id parameters] :as view-sig}]
   (let [v (get-in @view-system [:views view-id])]
     (try
@@ -179,6 +190,7 @@
                                 view-id "e:" e)))))
 
 (defn subscribed-views
+  "Returns a list of all views in the system that have subscribers."
   []
   (reduce into #{} (vals (:subscribed @view-system))))
 
@@ -194,7 +206,9 @@
     (or (:hints (first p)) #{})))
 
 (defn refresh-views!
-  "Given a collection of hints, or a single hint, find all dirty views and schedule them for a refresh."
+  "Given a collection of hints, check all views in the system to find any that need refreshing
+   and schedule refreshes for them. If no hints are provided, will use any that have been
+   queued up in the view-system."
   ([hints]
    (when (seq hints)
      (debug "refresh hints:" hints)
@@ -212,7 +226,9 @@
   (Thread/sleep (max 0 (- min-refresh-interval (- (System/currentTimeMillis) last-update)))))
 
 (defn refresh-worker-thread
-  "Handles refresh requests."
+  "Returns a refresh worker thread function. A 'refresh worker' continually waits for
+   refresh requests and when there is one, handles it by running the view, getting the view
+   data and then sending it out to all the view's subscribers. "
   []
   (fn []
     (try
@@ -235,6 +251,10 @@
       (debug "exiting worker thread"))))
 
 (defn refresh-watcher-thread
+  "Returns a refresh watcher thread function. A 'refresh watcher' continually attempts
+   to schedule refreshes for any views in the system which are 'dirty' (a dirty view in
+   this case is one when there is a hint waiting in the view-system that is relevant
+   to the view)."
   [min-refresh-interval]
   (fn []
     (let [last-update (:last-update @view-system)]
