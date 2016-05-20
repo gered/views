@@ -12,6 +12,7 @@
 ;; {:views {:id1 view1, id2 view2, ...}
 ;;  :send-fn (fn [subscriber-key data] ...)
 ;;  :put-hints-fn (fn [hints] ... )
+;;  :auth-fn (fn [view-sig subscriber-key context] ...)
 ;;
 ;;  :hashes {view-sig hash, ...}
 ;;  :subscribed {subscriber-key #{view-sig, ...}}
@@ -56,6 +57,14 @@
     (send-fn subscriber-key [(dissoc view-sig :namespace) data])
     (throw (new Exception "no send-fn function set in view-system"))))
 
+(defn- authorized-subscription?
+  [view-sig subscriber-key context]
+  (if-let [auth-fn (:auth-fn @view-system)]
+    (auth-fn view-sig subscriber-key context)
+    ; assume that if no auth-fn is specified, that we are not doing auth checks at all
+    ; so do not disallow access to any subscription
+    true))
+
 (defn- subscribe-view!
   [view-system view-sig subscriber-key]
   (-> view-system
@@ -67,22 +76,25 @@
   (update-in view-system [:hashes view-sig] #(or % data-hash))) ;; see note #1 in NOTES.md
 
 (defn subscribe!
-  [namespace view-id parameters subscriber-key]
+  [namespace view-id parameters subscriber-key & [context]]
   (when-let [view (get-in @view-system [:views view-id])]
     (let [view-sig (->view-sig namespace view-id parameters)]
-      (swap! view-system subscribe-view! view-sig subscriber-key)
-      (future
-        (try
-          (let [vdata     (data view namespace parameters)
-                data-hash (hash vdata)]
-            ;; Check to make sure that we are still subscribed. It's possible that
-            ;; an unsubscription event came in while computing the view.
-            (when (contains? (get-in @view-system [:subscribed subscriber-key]) view-sig)
-              (swap! view-system update-hash! view-sig data-hash)
-              (send-view-data! subscriber-key view-sig vdata)))
-          (catch Exception e
-            (error "error subscribing:" namespace view-id parameters
-                   "e:" e "msg:" (.getMessage e))))))))
+      (if (authorized-subscription? view-sig subscriber-key context)
+        (do
+          (swap! view-system subscribe-view! view-sig subscriber-key)
+          (future
+            (try
+              (let [vdata     (data view namespace parameters)
+                    data-hash (hash vdata)]
+                ;; Check to make sure that we are still subscribed. It's possible that
+                ;; an unsubscription event came in while computing the view.
+                (when (contains? (get-in @view-system [:subscribed subscriber-key]) view-sig)
+                  (swap! view-system update-hash! view-sig data-hash)
+                  (send-view-data! subscriber-key view-sig vdata)))
+              (catch Exception e
+                (error "error subscribing:" namespace view-id parameters
+                       "e:" e "msg:" (.getMessage e))))))
+        (debug "subscription not authorized" view-sig subscriber-key context)))))
 
 (defn- remove-from-subscribers
   [view-system view-sig subscriber-key]
@@ -301,22 +313,26 @@
   [f]
   (swap! view-system assoc :put-hints-fn f))
 
+(defn set-auth-fn!
+  "Sets a function that authorizes view subscriptions. If authorization fails
+   (the function returns false), the subscription is not processed."
+  [f]
+  (swap! view-system assoc :auth-fn f))
+
 (defn init!
   "Initializes the view system for use with some basic defaults that can be
    overridden as needed. Many applications may want to ignore this function
    and instead manually initialize the view system themselves. Some of the
    defaults set by this function are only appropriate for non-distributed
    configurations."
-  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn views]
+  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn views]
       :or   {refresh-interval 1000
              worker-threads   4
              put-hints-fn     #(refresh-views! %)}}]
-  (if send-fn
-    (set-send-fn! send-fn))
-  (if put-hints-fn
-    (set-put-hints-fn! put-hints-fn))
-  (if views
-    (add-views! views))
+  (if send-fn (set-send-fn! send-fn))
+  (if put-hints-fn (set-put-hints-fn! put-hints-fn))
+  (if auth-fn (set-auth-fn! auth-fn))
+  (if views (add-views! views))
   (start-update-watcher! refresh-interval worker-threads))
 
 (defn shutdown!
