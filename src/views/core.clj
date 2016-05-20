@@ -53,7 +53,7 @@
 (defn- send-view-data!
   [subscriber-key {:keys [namespace view-id parameters] :as view-sig} data]
   (if-let [send-fn (:send-fn @view-system)]
-    (send-fn subscriber-key [[view-id parameters] data])
+    (send-fn subscriber-key [(dissoc view-sig :namespace) data])
     (throw (new Exception "no send-fn function set in view-system"))))
 
 (defn- subscribe-view!
