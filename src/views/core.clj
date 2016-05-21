@@ -47,13 +47,10 @@
 (def refresh-queue (ArrayBlockingQueue. refresh-queue-size))
 
 (defn ->view-sig
-  ([namespace view-id parameters]
-   {:namespace  namespace
-    :view-id    view-id
-    :parameters parameters})
-  ([view-id parameters]
-   {:view-id    view-id
-    :parameters parameters}))
+  [namespace view-id parameters]
+  {:namespace  namespace
+   :view-id    view-id
+   :parameters parameters})
 
 (defn- send-view-data!
   [subscriber-key {:keys [namespace view-id parameters] :as view-sig} data]
