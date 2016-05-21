@@ -26,23 +26,24 @@
 
 (defonce view-system (atom {}))
 
-
+(defonce statistics (atom {}))
 
 (def refresh-queue-size
   (if-let [n (:views-refresh-queue-size env)]
     (Long/parseLong n)
     1000))
 
-(defonce statistics (atom {}))
 
 (defn reset-stats!
   []
-  (swap! statistics (fn [s] {:enabled (boolean (:enabled s)), :refreshes 0, :dropped 0, :deduplicated 0})))
+  (swap! statistics assoc
+         :refreshes 0
+         :dropped 0
+         :deduplicated 0))
 
-(defn collect-stats? [] (:enabled @statistics))
-
-(reset-stats!)
-
+(defn collect-stats?
+  []
+  (boolean (:logger @statistics)))
 
 (def refresh-queue (ArrayBlockingQueue. refresh-queue-size))
 
@@ -300,20 +301,44 @@
          :refresh-watcher nil
          :workers nil))
 
-(defn log-statistics!
-  "Run a thread that logs statistics every msecs."
+(defn logger-thread
+  "Returns a logger thread function. A logger periodically writes view system
+   statistics to the log that are collected only when logging is enabled."
   [msecs]
-  (swap! statistics assoc-in [:enabled] true)
   (let [secs (/ msecs 1000)]
-    (.start (Thread. (fn []
-                       (Thread/sleep msecs)
-                       (let [stats @statistics]
-                         (reset-stats!)
-                         (info "subscribed views:" (active-view-count)
-                               (format "refreshes/sec: %.1f" (double (/ (:refreshes stats) secs)))
-                               (format "dropped/sec: %.1f" (double (/ (:dropped stats) secs)))
-                               (format "deduped/sec: %.1f" (double (/ (:deduplicated stats) secs))))
-                         (recur)))))))
+    (fn []
+      (try
+        (Thread/sleep msecs)
+        (let [stats @statistics]
+          (reset-stats!)
+          (info "subscribed views:" (active-view-count)
+                (format "refreshes/sec: %.1f" (double (/ (:refreshes stats) secs)))
+                (format "dropped/sec: %.1f" (double (/ (:dropped stats) secs)))
+                (format "deduped/sec: %.1f" (double (/ (:deduplicated stats) secs)))))
+        (catch InterruptedException e))
+      (if-not (:stop? @statistics)
+        (recur)))))
+
+(defn start-logger!
+  "Starts a logger thread that will enable collection of view statistics
+   which the logger will periodically write out to the log."
+  [log-interval]
+  (if (:logger @statistics)
+    (error "cannot start new logger thread until existing thread is stopped")
+    (let [logger (Thread. ^Runnable (logger-thread log-interval))]
+      (swap! statistics assoc
+             :logger logger
+             :stop? false)
+      (reset-stats!)
+      (.start logger))))
+
+(defn stop-logger!
+  "Stops the logger thread."
+  []
+  (swap! statistics assoc :stop? true)
+  (if-let [^Thread logger (:logger @statistics)]
+    (.interrupt logger))
+  (swap! statistics assoc :logger nil))
 
 (defn hint
   "Create a hint."
