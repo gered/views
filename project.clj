@@ -6,8 +6,7 @@
                  :url "http://opensource.org/licenses/MIT"}
 
   :dependencies [[org.clojure/tools.logging "0.3.1"]
-                 [prismatic/plumbing "0.5.3"]
-                 [pjstadig/humane-test-output "0.8.0"]]
+                 [prismatic/plumbing "0.5.3"]]
 
   :profiles     {:provided
                  {:dependencies
