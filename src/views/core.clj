@@ -350,6 +350,12 @@
   [hint]
   (swap! view-system update-in [:hints] (fnil conj #{}) hint))
 
+(defn put-hints!
+  "Adds a collection of hints to the view system by using the view system
+   configuration's :put-hints-fn."
+  [hints]
+  ((:put-hints-fn @view-system) hints))
+
 (defn add-views!
   "Add a collection of views to the system."
   [views]
