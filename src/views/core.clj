@@ -360,56 +360,75 @@
   [hints]
   ((:put-hints-fn @view-system) hints))
 
+(defn- get-views-map
+  [views]
+  (map vector (map id views) views))
+
 (defn add-views!
   "Add a collection of views to the system."
   [views]
-  (swap! view-system update-in [:views] (fnil into {}) (map vector (map id views) views)))
+  (swap! view-system update-in [:views] (fnil into {}) (get-views-map views)))
 
-(defn set-send-fn!
-  "Sets a function that sends view data to a subscriber whenever a view it
-   is subscribed to has refreshed data."
-  [f]
-  (swap! view-system assoc :send-fn f))
+(def default-options
+  "Default options used to initialize the views system via init!"
+  {
+   ; interval in milliseconds at which the refresh watcher thread will
+   ; check for any queued up hints and dispatch relevant view refresh
+   ; updates to the worker threads.
+   :refresh-interval   1000
 
-(defn set-put-hints-fn!
-  "Sets a function that adds hints to the view system. The function set is intended
-   to be used by other implementations of IView."
-  [f]
-  (swap! view-system assoc :put-hints-fn f))
+   ; the number of refresh worker threads that poll for view refresh
+   ; requests and dispatch updated view data to subscribers.
+   :worker-threads     8
 
-(defn set-auth-fn!
-  "Sets a function that authorizes view subscriptions. If authorization fails
-   (the function returns false), the subscription is not processed."
-  [f]
-  (swap! view-system assoc :auth-fn f))
+   ; a function that adds hints to the view system. this function will be used
+   ; by other libraries that implement IView. this function must be set for
+   ; normal operation of the views system. the default function provided
+   ; will trigger relevant view refreshes immediately.
+   ; (fn [hints] ... )
+   :put-hints-fn       (fn [hints] (refresh-views! hints))
 
-(defn set-namespace-fn!
-  "Sets a function that returns a namespace to use for view subscriptions."
-  [f]
-  (swap! view-system assoc :namespace-fn f))
+   ; a function that authorizes view subscriptions. should return true if the
+   ; subscription is authorized. if not set, no view subscriptions will require
+   ; any authorization.
+   ; (fn [subscriber-key view-sig context] ... )
+   :auth-fn            nil
+
+   ; a function that returns a namespace to use for view subscriptions
+   ; (fn [subscriber-key view-sig context] ... )
+   :namespace-fn       nil
+
+   ; interval in milliseconds at which a logger will write view system
+   ; statistics to the log. if not set, the logger will be disabled.
+   :stats-log-interval nil
+   })
 
 (defn init!
-  "Initializes the view system for use with some basic defaults that can be
-   overridden as needed. Many applications may want to ignore this function
-   and instead manually initialize the view system themselves. Some of the
-   defaults set by this function are only appropriate for non-distributed
-   configurations."
-  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn namespace-fn views stats-log-interval]
-      :or   {refresh-interval 1000
-             worker-threads   4
-             put-hints-fn     #(refresh-views! %)}}]
-  (if send-fn (set-send-fn! send-fn))
-  (if put-hints-fn (set-put-hints-fn! put-hints-fn))
-  (if auth-fn (set-auth-fn! auth-fn))
-  (if namespace-fn (set-namespace-fn! namespace-fn))
-  (if views (add-views! views))
-  (when stats-log-interval
-    (swap! view-system assoc :logging? true)
-    (start-logger! stats-log-interval))
-  (start-update-watcher! refresh-interval worker-threads))
+  "Initializes the view system for use with the list of views provided.
+
+   send-fn is a function that sends view refresh data to subscribers. it is
+   of the form: (fn [subscriber-key [view-sig view-data]] ... )
+
+   options is a map of options to configure the view system with. See
+   views.core/default-options for a description of the available options
+   and the defaults that will be used for any options not provided in
+   the call to init!."
+  [views send-fn & [options]]
+  (let [options (merge default-options options)]
+    (reset! view-system
+            {:views        (into {} (get-views-map views))
+             :send-fn      send-fn
+             :put-hints-fn (:put-hints-fn options)
+             :auth-fn      (:auth-fn options)
+             :namespace-fn (:namespace-fn options)})
+    (start-update-watcher! (:refresh-interval options)
+                           (:worker-threads options))
+    (when-let [stats-log-interval (:stats-log-interval options)]
+      (swap! view-system assoc :logging? true)
+      (start-logger! stats-log-interval))))
 
 (defn shutdown!
-  "Closes the view system down, terminating all worker threads and clearing
+  "Shuts the view system down, terminating all worker threads and clearing
    all view subscriptions and data."
   []
   (stop-update-watcher!)
