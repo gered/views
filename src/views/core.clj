@@ -384,7 +384,7 @@
    and instead manually initialize the view system themselves. Some of the
    defaults set by this function are only appropriate for non-distributed
    configurations."
-  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn namespace-fn views]
+  [& {:keys [refresh-interval worker-threads send-fn put-hints-fn auth-fn namespace-fn views stats-log-interval]
       :or   {refresh-interval 1000
              worker-threads   4
              put-hints-fn     #(refresh-views! %)}}]
@@ -393,6 +393,9 @@
   (if auth-fn (set-auth-fn! auth-fn))
   (if namespace-fn (set-namespace-fn! namespace-fn))
   (if views (add-views! views))
+  (when stats-log-interval
+    (swap! view-system assoc :logging? true)
+    (start-logger! stats-log-interval))
   (start-update-watcher! refresh-interval worker-threads))
 
 (defn shutdown!
@@ -400,4 +403,6 @@
    all view subscriptions and data."
   []
   (stop-update-watcher!)
+  (if (:logging? @view-system)
+    (stop-logger!))
   (reset! view-system {}))
