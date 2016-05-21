@@ -345,10 +345,14 @@
   [namespace hint type]
   {:namespace namespace :hint hint :type type})
 
-(defn add-hint!
-  "Add a hint to the system."
-  [hint]
-  (swap! view-system update-in [:hints] (fnil conj #{}) hint))
+(defn queue-hints!
+  "Queues up hints in the view system so that they will be picked up by the refresh
+   watcher and dispatched to the workers resulting in view updates being sent out
+   for the relevant views/subscribers."
+  [hints]
+  (swap! view-system update-in [:hints]
+         (fn [existing-hints]
+           (reduce conj (or existing-hints #{}) hints))))
 
 (defn put-hints!
   "Adds a collection of hints to the view system by using the view system
