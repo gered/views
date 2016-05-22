@@ -434,7 +434,11 @@
              :send-fn       send-fn
              :put-hints-fn  (:put-hints-fn options)
              :auth-fn       (:auth-fn options)
-             :namespace-fn  (:namespace-fn options)})
+             :namespace-fn  (:namespace-fn options)
+             ; keeping a copy of the options used during init allows other libraries
+             ; that plugin/extend views functionality (e.g. IView implementations)
+             ; to make use of any options themselves
+             :options       options})
     (start-update-watcher! (:refresh-interval options)
                            (:worker-threads options))
     (when-let [stats-log-interval (:stats-log-interval options)]
