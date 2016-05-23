@@ -44,10 +44,13 @@
   (boolean (:logger @statistics)))
 
 (defn ->view-sig
-  [namespace view-id parameters]
-  {:namespace  namespace
-   :view-id    view-id
-   :parameters parameters})
+  ([namespace view-id parameters]
+   {:namespace  namespace
+    :view-id    view-id
+    :parameters parameters})
+  ([view-id parameters]
+   {:view-id    view-id
+    :parameters parameters}))
 
 (defn- send-view-data!
   [subscriber-key {:keys [namespace view-id parameters] :as view-sig} data]
@@ -94,7 +97,9 @@
    data for the view."
   [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
   (if-let [view (get-in @view-system [:views view-id])]
-    (let [namespace (get-namespace view-sig subscriber-key context)
+    (let [namespace (if (contains? view-sig :namespace)
+                      namespace
+                      (get-namespace view-sig subscriber-key context))
           view-sig  (->view-sig namespace view-id parameters)]
       (if (authorized-subscription? view-sig subscriber-key context)
         (do
@@ -160,7 +165,9 @@
   (trace "unsubscribing from view" view-sig subscriber-key)
   (swap! view-system
          (fn [vs]
-           (let [namespace (get-namespace view-sig subscriber-key context)
+           (let [namespace (if (contains? view-sig :namespace)
+                             namespace
+                             (get-namespace view-sig subscriber-key context))
                  view-sig  (->view-sig namespace view-id parameters)]
              (-> vs
                  (remove-from-subscribed view-sig subscriber-key)
