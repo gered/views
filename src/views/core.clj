@@ -63,6 +63,11 @@
     ; so do not disallow access to any subscription
     true))
 
+(defn- on-unauthorized-subscription
+  [view-sig subscriber-key context]
+  (if-let [on-unauth-fn (:on-unauth-fn @view-system)]
+    (on-unauth-fn view-sig subscriber-key context)))
+
 (defn- get-namespace
   [view-sig subscriber-key context]
   (if-let [namespace-fn (:namespace-fn @view-system)]
@@ -88,7 +93,7 @@
    the subscription is successful, the subscriber will be sent the initial
    data for the view."
   [{:keys [namespace view-id parameters] :as view-sig} subscriber-key context]
-  (when-let [view (get-in @view-system [:views view-id])]
+  (if-let [view (get-in @view-system [:views view-id])]
     (let [namespace (get-namespace view-sig subscriber-key context)
           view-sig  (->view-sig namespace view-id parameters)]
       (if (authorized-subscription? view-sig subscriber-key context)
@@ -106,7 +111,11 @@
               (catch Exception e
                 (error "error subscribing:" namespace view-id parameters
                        "e:" e "msg:" (.getMessage e))))))
-        (trace "subscription not authorized" view-sig subscriber-key context)))))
+        (do
+          (trace "subscription not authorized" view-sig subscriber-key context)
+          (on-unauthorized-subscription view-sig subscriber-key context)
+          nil)))
+    (throw (new Exception (str "Subscription for non-existant view: " view-id)))))
 
 (defn- remove-from-subscribers
   [view-system view-sig subscriber-key]
@@ -403,8 +412,12 @@
    ; a function that authorizes view subscriptions. should return true if the
    ; subscription is authorized. if not set, no view subscriptions will require
    ; any authorization.
-   ; (fn [subscriber-key view-sig context] ... )
+   ; (fn [view-sig subscriber-key context] ... )
    :auth-fn            nil
+
+   ; a function that is called when subscription authorization fails.
+   ; (fn [view-sig subscriber-key context] ... )
+   :on-unauth-fn       nil
 
    ; a function that returns a namespace to use for view subscriptions
    ; (fn [subscriber-key view-sig context] ... )
@@ -434,6 +447,7 @@
              :send-fn       send-fn
              :put-hints-fn  (:put-hints-fn options)
              :auth-fn       (:auth-fn options)
+             :on-unauth-fn  (:on-unauth-fn options)
              :namespace-fn  (:namespace-fn options)
              ; keeping a copy of the options used during init allows other libraries
              ; that plugin/extend views functionality (e.g. IView implementations)
