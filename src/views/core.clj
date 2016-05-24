@@ -183,7 +183,12 @@
          (fn [vs]
            (let [view-sigs (get-in vs [:subscribed subscriber-key])
                  vs*       (update-in vs [:subscribed] dissoc subscriber-key)]
-             (reduce #(remove-from-subscribers %1 %2 subscriber-key) vs* view-sigs)))))
+             (reduce
+               #(-> %1
+                    (remove-from-subscribers %2 subscriber-key)
+                    (clean-up-unneeded-hashes %2))
+               vs*
+               view-sigs)))))
 
 (defn refresh-view!
   "Schedules a view (identified by view-sig) to be refreshed by one of the worker threads
