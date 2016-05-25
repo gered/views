@@ -430,7 +430,7 @@
    :on-unauth-fn       nil
 
    ; a function that returns a namespace to use for view subscriptions
-   ; (fn [subscriber-key view-sig context] ... )
+   ; (fn [view-sig subscriber-key context] ... )
    :namespace-fn       nil
 
    ; interval in milliseconds at which a logger will write view system
