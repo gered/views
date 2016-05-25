@@ -114,8 +114,7 @@
                   (swap! view-system update-hash! view-sig data-hash)
                   (send-view-data! subscriber-key view-sig vdata)))
               (catch Exception e
-                (error "error subscribing:" namespace view-id parameters
-                       "e:" e "msg:" (.getMessage e))))))
+                (error e "error subscribing to view" view-sig)))))
         (do
           (trace "subscription not authorized" view-sig subscriber-key context)
           (on-unauthorized-subscription view-sig subscriber-key context)
@@ -205,8 +204,8 @@
             (do
               (when (collect-stats?) (swap! statistics update-in [:deduplicated] inc))
               (trace "already queued for refresh" view-sig))))
-        (catch Exception e (error "error determining if view is relevant, view-id:"
-                                  view-id "e:" e))))))
+        (catch Exception e
+          (error e "error determining if view is relevant" view-sig))))))
 
 (defn subscribed-views
   "Returns a list of all views in the system that have subscribers."
@@ -264,8 +263,7 @@
                   (send-view-data! subscriber-key view-sig vdata))
                 (swap! view-system assoc-in [:hashes view-sig] hdata)))
             (catch Exception e
-              (error "error refreshing:" namespace view-id parameters
-                     "e:" e "msg:" (.getMessage e)))))
+              (error e "error refreshing:" namespace view-id parameters))))
         (catch InterruptedException e))
       (if-not (:stop-workers? @view-system)
         (recur)
@@ -285,7 +283,7 @@
           (wait last-update min-refresh-interval))
         (catch InterruptedException e)
         (catch Exception e
-          (error "exception in views e:" e "msg:" (.getMessage e))))
+          (error e "exception in views")))
       (if-not (:stop-refresh-watcher? @view-system)
         (recur)
         (trace "exiting refresh watcher thread")))))
