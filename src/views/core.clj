@@ -311,18 +311,24 @@
 
 (defn stop-update-watcher!
   "Stops threads for the views refresh watcher and worker threads."
-  []
+  [& [wait-for-threads?]]
   (trace "stopping refresh watcher and workers")
-  (swap! view-system assoc
-         :stop-refresh-watcher? true
-         :stop-workers? true)
-  (if-let [^Thread refresh-watcher (:refresh-watcher @view-system)]
-    (.interrupt refresh-watcher))
-  (doseq [^Thread worker-thread (:workers @view-system)]
-    (.interrupt worker-thread))
-  (swap! view-system assoc
-         :refresh-watcher nil
-         :workers nil))
+  (let [worker-threads (:workers @view-system)
+        watcher-thread (:refresh-watcher @view-system)
+        threads        (->> worker-threads
+                            (cons watcher-thread)
+                            (remove nil?))]
+    (swap! view-system assoc
+           :stop-refresh-watcher? true
+           :stop-workers? true)
+    (doseq [^Thread t threads]
+      (.interrupt t))
+    (if wait-for-threads?
+      (doseq [^Thread t threads]
+        (.join t)))
+    (swap! view-system assoc
+           :refresh-watcher nil
+           :workers nil)))
 
 (defn logger-thread
   "Returns a logger thread function. A logger periodically writes view system
@@ -358,12 +364,13 @@
 
 (defn stop-logger!
   "Stops the logger thread."
-  []
+  [& [wait-for-thread?]]
   (trace "stopping logger")
-  (swap! statistics assoc :stop? true)
-  (if-let [^Thread logger (:logger @statistics)]
-    (.interrupt logger))
-  (swap! statistics assoc :logger nil))
+  (let [^Thread logger-thread (:logger @statistics)]
+    (swap! statistics assoc :stop? true)
+    (if logger-thread (.interrupt logger-thread))
+    (if wait-for-thread? (.join logger-thread))
+    (swap! statistics assoc :logger nil)))
 
 (defn hint
   "Create a hint."
@@ -472,9 +479,9 @@
 (defn shutdown!
   "Shuts the view system down, terminating all worker threads and clearing
    all view subscriptions and data."
-  []
+  [& [wait-for-threads?]]
   (trace "shutting down views sytem")
-  (stop-update-watcher!)
+  (stop-update-watcher! wait-for-threads?)
   (if (:logging? @view-system)
-    (stop-logger!))
+    (stop-logger! wait-for-threads?))
   (reset! view-system {}))
