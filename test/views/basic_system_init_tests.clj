@@ -2,7 +2,9 @@
   (:use
     clojure.test
     views.protocols
-    views.core))
+    views.core
+    views.test-memory-db)
+  (:import (views.test_memory_db MemoryView)))
 
 (defn reset-state-fixture! [f]
   (reset! view-system {})
@@ -11,26 +13,6 @@
 
 (use-fixtures :each reset-state-fixture!)
 
-
-
-(def memory-database (atom {}))
-
-(defrecord MemoryView [id ks]
-  IView
-  (id [_] id)
-  (data [_ namespace parameters]
-    (get-in @memory-database (-> [namespace]
-                                 (into ks)
-                                 (into parameters))))
-  (relevant? [_ namespace parameters hints]
-    (some #(and (= namespace (:namespace %))
-                (= ks (:hint %)))
-          hints)))
-
-(def views
-  [(MemoryView. :foo [:foo])
-   (MemoryView. :bar [:bar])
-   (MemoryView. :baz [:baz])])
 
 (defn dummy-send-fn [subscriber-key [view-sig view-data]])
 

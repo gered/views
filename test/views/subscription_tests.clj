@@ -2,42 +2,9 @@
   (:use
     clojure.test
     views.protocols
-    views.core))
+    views.core
+    views.test-memory-db))
 
-(def memory-database
-  (atom {:a {:foo 1 :bar 200 :baz [1 2 3]}
-         :b {:foo 2 :bar 300 :baz [2 3 4]}}))
-
-(defrecord MemoryView [id ks]
-  IView
-  (id [_] id)
-  (data [_ namespace parameters]
-    (get-in @memory-database (-> [namespace]
-                                 (into ks)
-                                 (into parameters))))
-  (relevant? [_ namespace parameters hints]
-    (some #(and (= namespace (:namespace %))
-                (= ks (:hint %)))
-          hints)))
-
-(defrecord SlowMemoryView [id ks]
-  IView
-  (id [_] id)
-  (data [_ namespace parameters]
-    ; simulate a slow database query
-    (Thread/sleep 1000)
-    (get-in @memory-database (-> [namespace]
-                                 (into ks)
-                                 (into parameters))))
-  (relevant? [_ namespace parameters hints]
-    (some #(and (= namespace (:namespace %))
-                (= ks (:hint %)))
-          hints)))
-
-(def views
-  [(MemoryView. :foo [:foo])
-   (MemoryView. :bar [:bar])
-   (MemoryView. :baz [:baz])])
 
 (def test-sent-data
   (atom []))
@@ -451,15 +418,13 @@
              @test-sent-data)))))
 
 (deftest unsubscribe-before-subscription-finishes-does-not-result-in-stuck-view
-  (let [views          [(SlowMemoryView. :foo [:foo])]
-        subscriber-key 123
+  (let [subscriber-key 123
         view-sig       (->view-sig :a :foo [])
         options        default-options]
     ; 1. init views
-    (init! views test-send-fn options)
+    (init! slow-views test-send-fn options)
     ; 2. subscribe to a view
-    (let [view-data        (get-view-data view-sig)
-          subscribe-result (subscribe! view-sig subscriber-key nil)]
+    (let [subscribe-result (subscribe! view-sig subscriber-key nil)]
       (is (= #{view-sig} (subscribed-views)))
       (is (not (realized? subscribe-result)))
       ; 3. unsubscribe before subscription finishes (still waiting on initial data
