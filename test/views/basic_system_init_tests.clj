@@ -1,6 +1,7 @@
 (ns views.basic-system-init-tests
   (:use
     clojure.test
+    views.test-helpers
     views.protocols
     views.core
     views.test-memory-db)
@@ -15,16 +16,6 @@
 
 
 (defn dummy-send-fn [subscriber-key [view-sig view-data]])
-
-
-
-;; test helper functions
-
-(defn contains-view?
-  [view-id]
-  (let [view (get (:views @view-system) view-id)]
-    (and view
-         (satisfies? IView view))))
 
 
 

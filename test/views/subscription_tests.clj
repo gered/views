@@ -1,6 +1,7 @@
 (ns views.subscription-tests
   (:use
     clojure.test
+    views.test-helpers
     views.protocols
     views.core
     views.test-memory-db))
@@ -28,16 +29,6 @@
   (f))
 
 (use-fixtures :each clear-sent-data-fixture reset-system-fixture)
-
-
-
-;; test helper functions
-
-(defn get-view-data
-  [view-sig]
-  (data (get-in @view-system [:views (:view-id view-sig)])
-        (:namespace view-sig)
-        (:parameters view-sig)))
 
 
 
@@ -75,10 +66,10 @@
       (while (not (realized? subscribe-result)))
       (is (= #{view-sig} (subscribed-views)))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig])))
-      (is (= [{:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}]
-             @test-sent-data)))))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}])))))
 
 (deftest can-unsubscribe-from-a-view
   (let [options        default-options
@@ -124,25 +115,13 @@
       (is (= #{view-sig} (get-in @view-system [:subscribed subscriber-key-b])))
       (is (= #{subscriber-key-a subscriber-key-b} (get-in @view-system [:subscribers view-sig])))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig])))
-      ; HACK: Doing a comparison like this because we do the 2 subscribe! calls so
-      ;       close together and they finish so quickly (each on different threads)
-      ;       that it _is_ possible B finishes before A (i've seen it happen a few times)
-      ;       This is not a problem with views, but it does mean we have to be careful
-      ;       in this unit test comparison to see what was sent.
-      (is (or (= [{:subscriber-key subscriber-key-a
-                   :view-sig       (dissoc view-sig :namespace)
-                   :view-data      view-data}
-                  {:subscriber-key subscriber-key-b
-                   :view-sig       (dissoc view-sig :namespace)
-                   :view-data      view-data}]
-                 @test-sent-data)
-              (= [{:subscriber-key subscriber-key-b
-                   :view-sig       (dissoc view-sig :namespace)
-                   :view-data      view-data}
-                  {:subscriber-key subscriber-key-a
-                   :view-sig       (dissoc view-sig :namespace)
-                   :view-data      view-data}]
-                 @test-sent-data)))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key-a
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}
+                           {:subscriber-key subscriber-key-b
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}]))
       ; 4. have one of the subscribers unsubscribe
       (unsubscribe! view-sig subscriber-key-a nil)
       (is (= #{view-sig} (subscribed-views)))
@@ -181,25 +160,13 @@
       (is (= #{subscriber-key-b} (get-in @view-system [:subscribers view-sig-b])))
       (is (= (hash view-data-a) (get-in @view-system [:hashes view-sig-a])))
       (is (= (hash view-data-b) (get-in @view-system [:hashes view-sig-b])))
-      ; HACK: Doing a comparison like this because we do the 2 subscribe! calls so
-      ;       close together and they finish so quickly (each on different threads)
-      ;       that it _is_ possible B finishes before A (i've seen it happen a few times)
-      ;       This is not a problem with views, but it does mean we have to be careful
-      ;       in this unit test comparison to see what was sent.
-      (is (or (= [{:subscriber-key subscriber-key-a
-                   :view-sig       (dissoc view-sig-a :namespace)
-                   :view-data      view-data-a}
-                  {:subscriber-key subscriber-key-b
-                   :view-sig       (dissoc view-sig-b :namespace)
-                   :view-data      view-data-b}]
-                 @test-sent-data)
-              (= [{:subscriber-key subscriber-key-b
-                   :view-sig       (dissoc view-sig-b :namespace)
-                   :view-data      view-data-b}
-                  {:subscriber-key subscriber-key-a
-                   :view-sig       (dissoc view-sig-a :namespace)
-                   :view-data      view-data-a}]
-                 @test-sent-data)))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key-a
+                            :view-sig       (dissoc view-sig-a :namespace)
+                            :view-data      view-data-a}
+                           {:subscriber-key subscriber-key-b
+                            :view-sig       (dissoc view-sig-b :namespace)
+                            :view-data      view-data-b}]))
       ; 4. have one of the subscribers unsubscribe
       (unsubscribe! view-sig-a subscriber-key-a nil)
       (is (= #{view-sig-b} (subscribed-views)))
@@ -235,13 +202,13 @@
       (is (= #{view-sig} (get-in @view-system [:subscribed subscriber-key])))
       (is (= #{subscriber-key} (get-in @view-system [:subscribers view-sig])))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig])))
-      (is (= [{:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}
-              {:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}]
-             @test-sent-data))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}
+                           {:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}]))
       ; 4. unsubscribe. only need to do this once, since only one subscription
       ;    should exist in the view system
       (unsubscribe! view-sig subscriber-key nil)
@@ -290,10 +257,10 @@
       (is (= #{view-sig-with-ns} (get-in @view-system [:subscribed subscriber-key])))
       (is (= #{subscriber-key} (get-in @view-system [:subscribers view-sig-with-ns])))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig-with-ns])))
-      (is (= [{:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}]
-             @test-sent-data))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}]))
       ; 4. unsubscribe.
       ; NOTE: we are passing in view-sig, not view-sig-with-ns. this is because
       ;       proper namespace-fn's should be consistent with what namespace they
@@ -327,10 +294,10 @@
       (is (= #{view-sig} (get-in @view-system [:subscribed subscriber-key])))
       (is (= #{subscriber-key} (get-in @view-system [:subscribers view-sig])))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig])))
-      (is (= [{:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}]
-             @test-sent-data))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}]))
       ; 4. unsubscribe.
       (unsubscribe! view-sig subscriber-key context)
       (is (empty? (keys (:subscribed @view-system))))
@@ -412,10 +379,10 @@
       (is (= #{view-sig} (get-in @view-system [:subscribed subscriber-key])))
       (is (= #{subscriber-key} (get-in @view-system [:subscribers view-sig])))
       (is (= (hash view-data) (get-in @view-system [:hashes view-sig])))
-      (is (= [{:subscriber-key subscriber-key
-               :view-sig       (dissoc view-sig :namespace)
-               :view-data      view-data}]
-             @test-sent-data)))))
+      (is (contains-only? @test-sent-data
+                          [{:subscriber-key subscriber-key
+                            :view-sig       (dissoc view-sig :namespace)
+                            :view-data      view-data}])))))
 
 (deftest unsubscribe-before-subscription-finishes-does-not-result-in-stuck-view
   (let [subscriber-key 123
