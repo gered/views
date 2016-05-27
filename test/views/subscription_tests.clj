@@ -28,7 +28,7 @@
   (reset! test-sent-data [])
   (f))
 
-(use-fixtures :each clear-sent-data-fixture reset-system-fixture)
+(use-fixtures :each clear-sent-data-fixture reset-system-fixture reset-memory-db-fixture)
 
 
 

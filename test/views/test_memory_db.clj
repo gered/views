@@ -3,9 +3,18 @@
     views.protocols
     views.core))
 
+(def base-memory-db-contents
+  {:a {:foo 1 :bar 200 :baz [1 2 3]}
+   :b {:foo 2 :bar 300 :baz [2 3 4]}})
+
 (def memory-database
-  (atom {:a {:foo 1 :bar 200 :baz [1 2 3]}
-         :b {:foo 2 :bar 300 :baz [2 3 4]}}))
+  (atom base-memory-db-contents))
+
+(defn reset-memory-db-fixture [f]
+  (reset! memory-database base-memory-db-contents)
+  (f))
+
+(def memory-view-hint-type :memory-db)
 
 (defrecord MemoryView [id ks]
   IView
@@ -16,7 +25,8 @@
                                  (into parameters))))
   (relevant? [_ namespace parameters hints]
     (some #(and (= namespace (:namespace %))
-                (= ks (:hint %)))
+                (= ks (:hint %))
+                (= memory-view-hint-type (:type %)))
           hints)))
 
 (defrecord SlowMemoryView [id ks]
@@ -30,7 +40,8 @@
                                  (into parameters))))
   (relevant? [_ namespace parameters hints]
     (some #(and (= namespace (:namespace %))
-                (= ks (:hint %)))
+                (= ks (:hint %))
+                (= memory-view-hint-type (:type %)))
           hints)))
 
 (def views
@@ -42,3 +53,9 @@
   [(SlowMemoryView. :foo [:foo])
    (SlowMemoryView. :bar [:bar])
    (SlowMemoryView. :baz [:baz])])
+
+(defn memory-db-assoc-in!
+  [namespace ks v]
+  (let [ms (swap! memory-database assoc-in (into [namespace] ks) v)]
+    (put-hints! [(hint namespace ks memory-view-hint-type)])
+    ms))
