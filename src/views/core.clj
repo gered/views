@@ -243,6 +243,20 @@
   [last-update min-refresh-interval]
   (Thread/sleep (max 0 (- min-refresh-interval (- (System/currentTimeMillis) last-update)))))
 
+(defn do-view-refresh!
+  [{:keys [namespace view-id parameters] :as view-sig}]
+  (if (collect-stats?) (swap! statistics update-in [:refreshes] inc))
+  (try
+    (let [view  (get-in @view-system [:views view-id])
+          vdata (data view namespace parameters)
+          hdata (hash vdata)]
+      (when-not (= hdata (get-in @view-system [:hashes view-sig]))
+        (doseq [subscriber-key (get-in @view-system [:subscribers view-sig])]
+          (send-view-data! subscriber-key view-sig vdata))
+        (swap! view-system assoc-in [:hashes view-sig] hdata)))
+    (catch Exception e
+      (error e "error refreshing:" namespace view-id parameters))))
+
 (defn refresh-worker-thread
   "Returns a refresh worker thread function. A 'refresh worker' continually waits for
    refresh requests and when there is one, handles it by running the view, getting the view
@@ -251,19 +265,9 @@
   (let [^ArrayBlockingQueue refresh-queue (:refresh-queue @view-system)]
     (fn []
       (try
-        (when-let [{:keys [namespace view-id parameters] :as view-sig} (.poll refresh-queue 60 TimeUnit/SECONDS)]
+        (when-let [view-sig (.poll refresh-queue 60 TimeUnit/SECONDS)]
           (trace "worker running refresh for" view-sig)
-          (if (collect-stats?) (swap! statistics update-in [:refreshes] inc))
-          (try
-            (let [view  (get-in @view-system [:views view-id])
-                  vdata (data view namespace parameters)
-                  hdata (hash vdata)]
-              (when-not (= hdata (get-in @view-system [:hashes view-sig]))
-                (doseq [subscriber-key (get-in @view-system [:subscribers view-sig])]
-                  (send-view-data! subscriber-key view-sig vdata))
-                (swap! view-system assoc-in [:hashes view-sig] hdata)))
-            (catch Exception e
-              (error e "error refreshing:" namespace view-id parameters))))
+          (do-view-refresh! view-sig))
         (catch InterruptedException e))
       (if-not (:stop-workers? @view-system)
         (recur)
