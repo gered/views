@@ -387,9 +387,7 @@
    for the relevant views/subscribers."
   [hints]
   (trace "queueing hints" hints)
-  (swap! view-system update-in [:hints]
-         (fn [existing-hints]
-           (reduce conj (or existing-hints #{}) hints))))
+  (swap! view-system update-in [:hints] (fnil into #{}) hints))
 
 (defn put-hints!
   "Adds a collection of hints to the view system by using the view system
