@@ -20,7 +20,6 @@
 
 (defn reset-system-fixture [f]
   (reset! view-system {})
-  (reset! statistics {})
   (f)
   (shutdown! true))
 
@@ -232,13 +231,13 @@
     (let [subscribe-result (subscribe! view-sig subscriber-key nil)]
       ; 4. block until subscription finishes
       (while (not (realized? subscribe-result)))
-      (is (= 0 (:deduplicated @statistics)))
+      (is (= 0 (get-in @view-system [:statistics :deduplicated])))
       ; 5. add duplicate hints by changing the same set of data twice
       ;    (hints will stay in the queue forever because we stopped the worker threads)
       (memory-db-assoc-in! :a [:foo] 6)
       (memory-db-assoc-in! :a [:foo] 7)
       (wait-for-refresh-views)
-      (is (= 1 (:deduplicated @statistics)))
+      (is (= 1 (get-in @view-system [:statistics :deduplicated])))
       (is (= [view-sig]
              (vec (:refresh-queue @view-system)))))))
 
@@ -265,12 +264,12 @@
         ; 4. block until subscription finishes
         (while (or (not (realized? subscribe-a))
                    (not (realized? subscribe-b))))
-        (is (= 0 (:dropped @statistics)))
+        (is (= 0 (get-in @view-system [:statistics :dropped])))
         ; 5. change some data affecting the subscribed view, resulting in more then 1 hint
         ;    being added to the refresh queue
         (memory-db-assoc-in! :a [:foo] 101010)
         (memory-db-assoc-in! :b [:foo] 010101)
         (wait-for-refresh-views)
-        (is (= 1 (:dropped @statistics)))
+        (is (= 1 (get-in @view-system [:statistics :dropped])))
         (is (= [view-sig-a]
                (vec (:refresh-queue @view-system))))))))

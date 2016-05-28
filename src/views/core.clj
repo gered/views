@@ -28,20 +28,19 @@
 
 (defonce view-system (atom {}))
 
-(defonce statistics (atom {}))
 
 
 
 (defn reset-stats!
   []
-  (swap! statistics assoc
+  (swap! view-system update-in [:statistics] assoc
          :refreshes 0
          :dropped 0
          :deduplicated 0))
 
 (defn collect-stats?
   []
-  (boolean (:logger @statistics)))
+  (boolean (get-in @view-system [:statistics :logger])))
 
 (defn ->view-sig
   ([namespace view-id parameters]
@@ -199,10 +198,10 @@
         (if (relevant? v namespace parameters hints)
           (if-not (.contains refresh-queue view-sig)
             (when-not (.offer refresh-queue view-sig)
-              (when (collect-stats?) (swap! statistics update-in [:dropped] inc))
+              (when (collect-stats?) (swap! view-system update-in [:statistics :dropped] inc))
               (error "refresh-queue full, dropping refresh request for" view-sig))
             (do
-              (when (collect-stats?) (swap! statistics update-in [:deduplicated] inc))
+              (when (collect-stats?) (swap! view-system update-in [:statistics :deduplicated] inc))
               (trace "already queued for refresh" view-sig))))
         (catch Exception e
           (error e "error determining if view is relevant" view-sig))))))
@@ -245,7 +244,7 @@
 
 (defn do-view-refresh!
   [{:keys [namespace view-id parameters] :as view-sig}]
-  (if (collect-stats?) (swap! statistics update-in [:refreshes] inc))
+  (if (collect-stats?) (swap! view-system update-in [:statistics :refreshes] inc))
   (try
     (let [view  (get-in @view-system [:views view-id])
           vdata (data view namespace parameters)
@@ -342,14 +341,14 @@
     (fn []
       (try
         (Thread/sleep msecs)
-        (let [stats @statistics]
+        (let [stats (:statistics @view-system)]
           (reset-stats!)
           (info "subscribed views:" (active-view-count)
                 (format "refreshes/sec: %.1f" (double (/ (:refreshes stats) secs)))
                 (format "dropped/sec: %.1f" (double (/ (:dropped stats) secs)))
                 (format "deduped/sec: %.1f" (double (/ (:deduplicated stats) secs)))))
         (catch InterruptedException e))
-      (if-not (:stop? @statistics)
+      (if-not (get-in @view-system [:statistics :stop?])
         (recur)))))
 
 (defn start-logger!
@@ -357,10 +356,10 @@
    which the logger will periodically write out to the log."
   [log-interval]
   (trace "starting logger. logging at" log-interval "secs intervals")
-  (if (:logger @statistics)
+  (if (get-in @view-system [:statistics :logger])
     (error "cannot start new logger thread until existing thread is stopped")
     (let [logger (Thread. ^Runnable (logger-thread log-interval))]
-      (swap! statistics assoc
+      (swap! view-system update-in [:statistics] assoc
              :logger logger
              :stop? false)
       (reset-stats!)
@@ -370,11 +369,11 @@
   "Stops the logger thread."
   [& [wait-for-thread?]]
   (trace "stopping logger")
-  (let [^Thread logger-thread (:logger @statistics)]
-    (swap! statistics assoc :stop? true)
+  (let [^Thread logger-thread (get-in @view-system [:statistics :logger])]
+    (swap! view-system assoc-in [:statistics :stop?] true)
     (if logger-thread (.interrupt logger-thread))
     (if wait-for-thread? (.join logger-thread))
-    (swap! statistics assoc :logger nil)))
+    (swap! view-system assoc-in [:statistics :logger] nil)))
 
 (defn hint
   "Create a hint."

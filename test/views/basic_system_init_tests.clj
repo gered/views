@@ -9,7 +9,6 @@
 
 (defn reset-state-fixture! [f]
   (reset! view-system {})
-  (reset! statistics {})
   (f))
 
 (use-fixtures :each reset-state-fixture!)
@@ -43,7 +42,6 @@
       ; 2. shutdown views (and wait for all threads to also finish)
       (shutdown! true)
       (is (empty? @view-system))
-      (is (empty? @statistics))
       (is (not (.isAlive ^Thread refresh-watcher)))
       (doseq [^Thread t workers]
         (is (not (.isAlive t)))))))
@@ -53,14 +51,14 @@
                     (assoc :stats-log-interval 10000))]
     ; 1. init views
     (init! views dummy-send-fn options)
-    (is (seq @statistics))
+    (is (seq (:statistics @view-system)))
     (is (:logging? @view-system))
     (is (collect-stats?))
-    (let [logger-thread (:logger @statistics)]
+    (let [logger-thread (get-in @view-system [:statistics :logger])]
       (is (.isAlive ^Thread logger-thread))
       ; 2. shutdown views
       (shutdown! true)
-      (is (nil? (:logger @statistics)))
+      (is (nil? (get-in @view-system [:statistics :logger])))
       (is (not (.isAlive ^Thread logger-thread))))))
 
 (deftest can-add-new-views-after-init

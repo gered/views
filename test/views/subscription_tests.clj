@@ -20,7 +20,6 @@
 
 (defn reset-system-fixture [f]
   (reset! view-system {})
-  (reset! statistics {})
   (f)
   (shutdown! true))
 
