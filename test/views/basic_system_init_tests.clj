@@ -5,7 +5,9 @@
     views.protocols
     views.core
     views.test-view-system)
-  (:import (views.test_view_system MemoryView)))
+  (:import
+    (views.test_view_system MemoryView)
+    (clojure.lang Atom)))
 
 (use-fixtures :each reset-test-views-system)
 
@@ -20,10 +22,11 @@
 ;; tests
 
 (deftest inits-with-correct-config-and-shutsdown-correctly
-  (let [options test-options]
-    (is (empty? @test-views-system))
-    ; 1. init views
-    (init! test-views-system test-options)
+  (let [options test-options
+        ; 1. init views
+        init-returned-atom (init! test-views-system test-options)]
+    (is (instance? Atom init-returned-atom))
+    (is (= init-returned-atom test-views-system))
     (is (seq @test-views-system))
     (is (= dummy-send-fn (:send-fn @test-views-system)))
     (is (and (contains-view? test-views-system :foo)
@@ -44,6 +47,18 @@
       (is (not (.isAlive ^Thread refresh-watcher)))
       (doseq [^Thread t workers]
         (is (not (.isAlive t)))))))
+
+(deftest init-without-existing-view-system-atom
+  (let [options test-options]
+    (let [init-created-atom (init! options)]
+      (is (instance? Atom init-created-atom))
+      (is (seq @init-created-atom))
+      (is (= dummy-send-fn (:send-fn @init-created-atom)))
+      (is (and (contains-view? init-created-atom :foo)
+               (contains-view? init-created-atom :bar)
+               (contains-view? init-created-atom :baz)))
+      (shutdown! init-created-atom)
+      (is (empty? @init-created-atom)))))
 
 (deftest init-can-also-start-logger
   (let [options (-> test-options
