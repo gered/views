@@ -2,10 +2,11 @@
   (:use
     clojure.test
     views.protocols
-    views.core))
+    views.core)
+  (:import (clojure.lang Atom)))
 
 (defn contains-view?
-  [view-id]
+  [^Atom view-system view-id]
   (let [view (get (:views @view-system) view-id)]
     (and view
          (satisfies? IView view))))
@@ -29,7 +30,7 @@
          elements)))
 
 (defn get-view-data
-  [view-sig]
+  [^Atom view-system view-sig]
   (data (get-in @view-system [:views (:view-id view-sig)])
         (:namespace view-sig)
         (:parameters view-sig)))
@@ -45,7 +46,8 @@
 ; this is kind of a hack, but necessary for some tests where we want to inspect
 ; the items being sent to the refresh queue without worker threads picking out
 ; the added items almost instantly.
-(defn stop-refresh-worker-threads []
+(defn stop-refresh-worker-threads
+  [^Atom view-system]
   (swap! view-system assoc :stop-workers? true)
   (doseq [^Thread t (:workers @view-system)]
     (.interrupt t)
