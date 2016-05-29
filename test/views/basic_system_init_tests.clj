@@ -30,7 +30,7 @@
              (contains-view? test-views-system :bar)
              (contains-view? test-views-system :baz)))
     (is (not (:logging? @test-views-system)))
-    (is (not (collect-stats? test-views-system)))
+    (is (not (collecting-stats? test-views-system)))
     (is (empty? (subscribed-views test-views-system)))
     (let [refresh-watcher (:refresh-watcher @test-views-system)
           workers         (:workers @test-views-system)]
@@ -52,7 +52,7 @@
     (init! test-views-system options)
     (is (seq (:statistics @test-views-system)))
     (is (:logging? @test-views-system))
-    (is (collect-stats? test-views-system))
+    (is (collecting-stats? test-views-system))
     (let [logger-thread (get-in @test-views-system [:statistics :logger])]
       (is (.isAlive ^Thread logger-thread))
       ; 2. shutdown views

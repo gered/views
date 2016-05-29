@@ -1,6 +1,6 @@
 (ns views.core
   (:import
-    [java.util.concurrent ArrayBlockingQueue TimeUnit]
+    (java.util.concurrent ArrayBlockingQueue TimeUnit)
     (clojure.lang Atom))
   (:require
     [views.protocols :refer [IView id data relevant?]]
@@ -30,6 +30,7 @@
 
 
 (defn reset-stats!
+  "Resets statistics collected back to zero."
   [^Atom view-system]
   (swap! view-system update-in [:statistics] assoc
          :refreshes 0
@@ -37,7 +38,8 @@
          :deduplicated 0)
   view-system)
 
-(defn collect-stats?
+(defn collecting-stats?
+  "Whether view statem statistics collection and logging is enabled or not."
   [^Atom view-system]
   (boolean (get-in @view-system [:statistics :logger])))
 
@@ -199,10 +201,10 @@
         (if (relevant? v namespace parameters hints)
           (if-not (.contains refresh-queue view-sig)
             (when-not (.offer refresh-queue view-sig)
-              (if (collect-stats? view-system) (swap! view-system update-in [:statistics :dropped] inc))
+              (if (collecting-stats? view-system) (swap! view-system update-in [:statistics :dropped] inc))
               (error "refresh-queue full, dropping refresh request for" view-sig))
             (do
-              (if (collect-stats? view-system) (swap! view-system update-in [:statistics :deduplicated] inc))
+              (if (collecting-stats? view-system) (swap! view-system update-in [:statistics :deduplicated] inc))
               (trace "already queued for refresh" view-sig))))
         (catch Exception e
           (error e "error determining if view is relevant" view-sig))))
@@ -247,7 +249,7 @@
 
 (defn do-view-refresh!
   [^Atom view-system {:keys [namespace view-id parameters] :as view-sig}]
-  (if (collect-stats? view-system) (swap! view-system update-in [:statistics :refreshes] inc))
+  (if (collecting-stats? view-system) (swap! view-system update-in [:statistics :refreshes] inc))
   (try
     (let [view  (get-in @view-system [:views view-id])
           vdata (data view namespace parameters)
@@ -394,14 +396,14 @@
   ((:put-hints-fn @view-system) view-system hints)
   view-system)
 
-(defn- get-views-map
+(defn- ->views-map
   [views]
   (map vector (map id views) views))
 
 (defn add-views!
   "Add a collection of views to the system."
   [^Atom view-system views]
-  (swap! view-system update-in [:views] (fnil into {}) (get-views-map views))
+  (swap! view-system update-in [:views] (fnil into {}) (->views-map views))
   view-system)
 
 (def default-options
@@ -478,7 +480,7 @@
      (trace "initializing views system using options:" options)
      (reset! view-system
              {:refresh-queue (ArrayBlockingQueue. (:refresh-queue-size options))
-              :views         (into {} (get-views-map (:views options)))
+              :views         (into {} (->views-map (:views options)))
               :send-fn       (:send-fn options)
               :put-hints-fn  (:put-hints-fn options)
               :auth-fn       (:auth-fn options)
