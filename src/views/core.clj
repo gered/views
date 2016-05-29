@@ -253,10 +253,7 @@
     (catch Exception e
       (error e "error refreshing:" namespace view-id parameters))))
 
-(defn refresh-worker-thread
-  "Returns a refresh worker thread function. A 'refresh worker' continually waits for
-   refresh requests and when there is one, handles it by running the view, getting the view
-   data and then sending it out to all the view's subscribers. "
+(defn- refresh-worker-thread
   [^Atom view-system]
   (let [^ArrayBlockingQueue refresh-queue (:refresh-queue @view-system)]
     (fn []
@@ -269,11 +266,7 @@
         (recur)
         (trace "exiting worker thread")))))
 
-(defn refresh-watcher-thread
-  "Returns a refresh watcher thread function. A 'refresh watcher' continually attempts
-   to schedule refreshes for any views in the system which are 'dirty' (a dirty view in
-   this case is one when there is a hint waiting in the view-system that is relevant
-   to the view)."
+(defn- refresh-watcher-thread
   [^Atom view-system min-refresh-interval]
   (fn []
     (let [last-update (:last-update @view-system)]
@@ -289,8 +282,8 @@
         (trace "exiting refresh watcher thread")))))
 
 (defn start-update-watcher!
-  "Starts threads for the views refresh watcher and worker threads that handle
-   view refresh requests."
+  "Starts threads for the views refresh watcher and worker threads that handle queued
+   hints and view refresh requests."
   [^Atom view-system min-refresh-interval threads]
   (trace "starting refresh watcher at" min-refresh-interval "ms interval and" threads "workers")
   (if (and (:refresh-watcher @view-system)
@@ -330,9 +323,7 @@
            :refresh-watcher nil
            :workers nil)))
 
-(defn logger-thread
-  "Returns a logger thread function. A logger periodically writes view system
-   statistics to the log that are collected only when logging is enabled."
+(defn- logger-thread
   [^Atom view-system msecs]
   (let [secs (/ msecs 1000)]
     (fn []
