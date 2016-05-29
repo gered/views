@@ -34,7 +34,8 @@
   (swap! view-system update-in [:statistics] assoc
          :refreshes 0
          :dropped 0
-         :deduplicated 0))
+         :deduplicated 0)
+  view-system)
 
 (defn collect-stats?
   [^Atom view-system]
@@ -168,7 +169,8 @@
              (-> view-system
                  (remove-from-subscribed view-sig subscriber-key)
                  (remove-from-subscribers view-sig subscriber-key)
-                 (clean-up-unneeded-hashes view-sig))))))
+                 (clean-up-unneeded-hashes view-sig)))))
+  view-system)
 
 (defn unsubscribe-all!
   "Removes all of a subscriber's (identified by subscriber-key) current
@@ -184,7 +186,8 @@
                     (remove-from-subscribers %2 subscriber-key)
                     (clean-up-unneeded-hashes %2))
                view-system*
-               view-sigs)))))
+               view-sigs))))
+  view-system)
 
 (defn refresh-view!
   "Schedules a view (identified by view-sig) to be refreshed by one of the worker threads
@@ -202,7 +205,8 @@
               (if (collect-stats? view-system) (swap! view-system update-in [:statistics :deduplicated] inc))
               (trace "already queued for refresh" view-sig))))
         (catch Exception e
-          (error e "error determining if view is relevant" view-sig))))))
+          (error e "error determining if view is relevant" view-sig))))
+    view-system))
 
 (defn subscribed-views
   "Returns a list of all views in the system that have subscribers."
@@ -226,8 +230,10 @@
   ([^Atom view-system hints]
    (when (seq hints)
      (trace "refresh hints:" hints)
-     (mapv #(refresh-view! view-system hints %) (subscribed-views view-system)))
-   (swap! view-system assoc :last-update (System/currentTimeMillis)))
+     (doseq [view-sig (subscribed-views view-system)]
+       (refresh-view! view-system hints view-sig)))
+   (swap! view-system assoc :last-update (System/currentTimeMillis))
+   view-system)
   ([^Atom view-system]
    (refresh-views! view-system (pop-hints! view-system))))
 
@@ -300,7 +306,8 @@
              :stop-workers? false)
       (.start refresh-watcher)
       (doseq [^Thread t worker-threads]
-        (.start t)))))
+        (.start t))
+      view-system)))
 
 (defn stop-update-watcher!
   "Stops threads for the views refresh watcher and worker threads."
@@ -321,7 +328,8 @@
         (.join t)))
     (swap! view-system assoc
            :refresh-watcher nil
-           :workers nil)))
+           :workers nil))
+  view-system)
 
 (defn- logger-thread
   [^Atom view-system msecs]
@@ -351,7 +359,8 @@
              :logger logger
              :stop? false)
       (reset-stats! view-system)
-      (.start logger))))
+      (.start logger)))
+  view-system)
 
 (defn stop-logger!
   "Stops the logger thread."
@@ -361,7 +370,8 @@
     (swap! view-system assoc-in [:statistics :stop?] true)
     (if logger-thread (.interrupt logger-thread))
     (if-not dont-wait-for-thread? (.join logger-thread))
-    (swap! view-system assoc-in [:statistics :logger] nil)))
+    (swap! view-system assoc-in [:statistics :logger] nil))
+  view-system)
 
 (defn hint
   "Create a hint."
@@ -374,13 +384,15 @@
    for the relevant views/subscribers."
   [^Atom view-system hints]
   (trace "queueing hints" hints)
-  (swap! view-system update-in [:hints] (fnil into #{}) hints))
+  (swap! view-system update-in [:hints] (fnil into #{}) hints)
+  view-system)
 
 (defn put-hints!
   "Adds a collection of hints to the view system by using the view system
    configuration's :put-hints-fn."
   [^Atom view-system hints]
-  ((:put-hints-fn @view-system) view-system hints))
+  ((:put-hints-fn @view-system) view-system hints)
+  view-system)
 
 (defn- get-views-map
   [views]
@@ -389,7 +401,8 @@
 (defn add-views!
   "Add a collection of views to the system."
   [^Atom view-system views]
-  (swap! view-system update-in [:views] (fnil into {}) (get-views-map views)))
+  (swap! view-system update-in [:views] (fnil into {}) (get-views-map views))
+  view-system)
 
 (def default-options
   "Default options used to initialize the views system via init!"
