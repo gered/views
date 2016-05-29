@@ -304,7 +304,7 @@
 
 (defn stop-update-watcher!
   "Stops threads for the views refresh watcher and worker threads."
-  [^Atom view-system & [wait-for-threads?]]
+  [^Atom view-system & [dont-wait-for-threads?]]
   (trace "stopping refresh watcher and workers")
   (let [worker-threads (:workers @view-system)
         watcher-thread (:refresh-watcher @view-system)
@@ -316,7 +316,7 @@
            :stop-workers? true)
     (doseq [^Thread t threads]
       (.interrupt t))
-    (if wait-for-threads?
+    (if-not dont-wait-for-threads?
       (doseq [^Thread t threads]
         (.join t)))
     (swap! view-system assoc
@@ -355,12 +355,12 @@
 
 (defn stop-logger!
   "Stops the logger thread."
-  [^Atom view-system & [wait-for-thread?]]
+  [^Atom view-system & [dont-wait-for-thread?]]
   (trace "stopping logger")
   (let [^Thread logger-thread (get-in @view-system [:statistics :logger])]
     (swap! view-system assoc-in [:statistics :stop?] true)
     (if logger-thread (.interrupt logger-thread))
-    (if wait-for-thread? (.join logger-thread))
+    (if-not dont-wait-for-thread? (.join logger-thread))
     (swap! view-system assoc-in [:statistics :logger] nil)))
 
 (defn hint
@@ -486,10 +486,10 @@
 (defn shutdown!
   "Shuts the view system down, terminating all worker threads and clearing
    all view subscriptions and data."
-  [^Atom view-system & [wait-for-threads?]]
+  [^Atom view-system & [dont-wait-for-threads?]]
   (trace "shutting down views sytem")
-  (stop-update-watcher! view-system wait-for-threads?)
+  (stop-update-watcher! view-system dont-wait-for-threads?)
   (if (:logging? @view-system)
-    (stop-logger! view-system wait-for-threads?))
+    (stop-logger! view-system dont-wait-for-threads?))
   (reset! view-system {})
   view-system)

@@ -39,7 +39,7 @@
       (doseq [^Thread t workers]
         (is (.isAlive t)))
       ; 2. shutdown views (and wait for all threads to also finish)
-      (shutdown! test-views-system true)
+      (shutdown! test-views-system)
       (is (empty? @test-views-system))
       (is (not (.isAlive ^Thread refresh-watcher)))
       (doseq [^Thread t workers]
@@ -56,7 +56,7 @@
     (let [logger-thread (get-in @test-views-system [:statistics :logger])]
       (is (.isAlive ^Thread logger-thread))
       ; 2. shutdown views
-      (shutdown! test-views-system true)
+      (shutdown! test-views-system)
       (is (nil? (get-in @test-views-system [:statistics :logger])))
       (is (not (.isAlive ^Thread logger-thread))))))
 
@@ -77,7 +77,7 @@
              (contains-view? test-views-system :one)
              (contains-view? test-views-system :two)))
     ; 3. shutdown views
-    (shutdown! test-views-system true)))
+    (shutdown! test-views-system)))
 
 (deftest can-replace-views-after-init
   (let [options          test-options
@@ -95,4 +95,4 @@
              (contains-view? test-views-system :baz)))
     (is (= replacement-view (get-in @test-views-system [:views :foo])))
     ; 3. shutdown views
-    (shutdown! test-views-system true)))
+    (shutdown! test-views-system)))

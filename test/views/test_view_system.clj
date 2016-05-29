@@ -22,7 +22,7 @@
   (reset! test-views-system {})
   (f)
   (if (seq @test-views-system)
-    (shutdown! test-views-system true)))
+    (shutdown! test-views-system)))
 
 (def memory-view-hint-type :memory-db)
 
