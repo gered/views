@@ -2,6 +2,13 @@
 
 Eventually consistent external materialized views.
 
+Also see these plugin libraries which allow you to use a views system
+in a number of really great ways in your applications:
+
+* [views.sql](https://github.com/gered/views.sql)
+* [views.honeysql](https://github.com/gered/views.honeysql)
+* [views.reagent](https://github.com/gered/views.reagent)
+
 ## Leiningen
 
 ```clj
@@ -490,7 +497,7 @@ refresh worker threads have finished (they are sent interrupt signals
 when `shutdown!` is called). If for some reason you do not wish to 
 block, you can pass an additional argument to `shutdown!`:
 
-```clj`
+```clj
 (views/shutdown! view-system true)   ; don't block waiting for threads to terminate
 ```
 
