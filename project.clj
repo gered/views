@@ -1,4 +1,4 @@
-(defproject gered/views "1.5"
+(defproject gered/views "1.6-SNAPSHOT"
   :description  "A view to the past helps navigate the future."
   :url          "https://github.com/gered/views"
 
