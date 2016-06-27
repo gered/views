@@ -12,7 +12,7 @@ in a number of really great ways in your applications:
 ## Leiningen
 
 ```clj
-[gered/views "1.5-SNAPSHOT"]
+[gered/views "1.5"]
 ```
 
 ## This is a fork!
